@@ -1,0 +1,3071 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام الاستعلام عن النتائج</title>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+font-family:Arial,sans-serif;
+background:#777777;
+min-height:100vh;
+}
+
+.header{
+width:100%;
+background:linear-gradient(135deg,#0755a5,#00366f);
+color:white;
+text-align:center;
+padding:22px 10px;
+box-shadow:0 3px 10px rgba(0,0,0,.3);
+}
+
+.header div{line-height:1.8}
+.ministry{font-size:23px;font-weight:bold}
+.directorate{font-size:21px;font-weight:bold}
+.school{font-size:20px;font-weight:bold}
+.system{
+font-size:23px;
+font-weight:bold;
+color:#ffdf70;
+margin-top:5px;
+}
+
+.search-container{
+width:92%;
+max-width:650px;
+margin:65px auto;
+background:#eeeeee;
+padding:25px;
+border-radius:10px;
+box-shadow:0 5px 15px rgba(0,0,0,.2);
+}
+
+.search-title{
+text-align:center;
+font-size:21px;
+font-weight:bold;
+color:#222;
+margin-bottom:15px;
+}
+
+.search-input{
+width:100%;
+height:55px;
+background:white;
+border:1px solid #bbb;
+border-radius:6px;
+outline:none;
+padding:12px;
+font-size:18px;
+text-align:center;
+}
+
+.search-input:focus{border:2px solid #218838}
+
+.search-button{
+width:100%;
+height:53px;
+margin-top:15px;
+background:#218838;
+color:white;
+border:none;
+border-radius:6px;
+font-size:20px;
+font-weight:bold;
+cursor:pointer;
+}
+
+.search-button:active{background:#176b2c}
+
+.message{
+text-align:center;
+font-size:17px;
+font-weight:bold;
+margin-top:20px;
+color:#333;
+line-height:1.8;
+}
+
+#resultArea{margin-top:20px;width:100%}
+
+.result-card{
+background:white;
+border-radius:9px;
+padding:15px;
+margin-top:15px;
+box-shadow:0 3px 10px #0002;
+}
+
+.result-card h3{
+color:#0755a5;
+text-align:center;
+margin-bottom:12px;
+}
+
+.result-info{
+text-align:center;
+line-height:2;
+font-weight:bold;
+margin-bottom:12px;
+}
+
+.result-table-wrap{overflow-x:auto}
+
+.result-table{
+width:100%;
+min-width:700px;
+border-collapse:collapse;
+background:white;
+}
+
+.result-table th,.result-table td{
+border:1px solid #aaa;
+padding:8px 4px;
+text-align:center;
+}
+
+.result-table th{
+background:#0755a5;
+color:white;
+font-size:13px;
+}
+
+.result-table td:first-child{
+background:#e2e8f0;
+font-weight:bold;
+}
+
+.blocked-result{
+background:#fff0f0;
+border:2px solid #c62828;
+color:#b42323;
+padding:18px;
+border-radius:9px;
+text-align:center;
+font-weight:bold;
+line-height:2;
+}
+
+@media(max-width:500px){
+.header{padding:17px 5px}
+.ministry{font-size:20px}
+.directorate{font-size:18px}
+.school{font-size:17px}
+.system{font-size:20px}
+.search-container{margin-top:45px;padding:18px}
+}
+</style>
+</head>
+
+<body>
+
+<header class="header">
+<div class="ministry">وزارة التربية</div>
+<div class="directorate">مديرية تربية محافظة بابل</div>
+<div class="school">اعدادية الشهيد عادل ناصر</div>
+<div class="system">نظام الاستعلام عن النتائج</div>
+</header>
+
+<main class="search-container">
+
+<div class="search-title">البحث عن نتيجة</div>
+
+<input
+type="text"
+id="searchInput"
+class="search-input"
+placeholder="اكتب الاسم الرباعي"
+autocomplete="off"
+>
+
+<button class="search-button" id="searchButton">
+بحث
+</button>
+
+<div class="message" id="message"></div>
+<div id="resultArea"></div>
+
+</main>
+
+<script type="module">
+
+import {initializeApp}
+from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+import {
+getDatabase,
+ref,
+get
+}
+from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig={
+apiKey:"AIzaSyCn-QppCSS7HVs53G1-DyTnpUX_hloUADk",
+authDomain:"mvhowbv.firebaseapp.com",
+databaseURL:"https://mvhowbv-default-rtdb.firebaseio.com",
+projectId:"mvhowbv",
+storageBucket:"mvhowbv.firebasestorage.app",
+messagingSenderId:"965620777330",
+appId:"1:965620777330:web:9e0d5b9061b9d745da1deb"
+};
+
+const app=initializeApp(firebaseConfig);
+const db=getDatabase(app);
+
+const message=document.getElementById("message");
+const resultArea=document.getElementById("resultArea");
+const searchInput=document.getElementById("searchInput");
+const searchButton=document.getElementById("searchButton");
+
+function normalizeName(name){
+return String(name||"")
+.trim()
+.replace(/\s+/g,"");
+}
+
+async function searchResult(){
+
+const name=searchInput.value.trim();
+
+resultArea.innerHTML="";
+
+if(!name){
+message.textContent="يرجى كتابة اسم الطالب";
+return;
+}
+
+message.textContent="جاري البحث عن النتيجة...";
+searchButton.disabled=true;
+
+try{
+
+const snapshot=await get(ref(db,"publicResults"));
+
+if(!snapshot.exists()){
+message.textContent="لا توجد بيانات طلاب في قاعدة البيانات";
+return;
+}
+
+const students=snapshot.val();
+
+const matches=Object.entries(students).filter(([id,student])=>{
+return normalizeName(student.name)===normalizeName(name);
+});
+
+if(matches.length===0){
+message.textContent="لم يتم العثور على الطالب، تأكد من كتابة الاسم كاملاً";
+return;
+}
+
+message.textContent="";
+
+matches.forEach(([id,student])=>{
+showStudent(student);
+});
+
+}catch(error){
+
+console.error("Firebase Error:",error);
+
+message.textContent=
+"تعذر الاتصال بقاعدة البيانات: "+
+(error.code||"")+
+" "+
+(error.message||"يرجى المحاولة مرة أخرى");
+
+}finally{
+searchButton.disabled=false;
+}
+
+}
+
+function showStudent(student){
+
+const card=document.createElement("div");
+card.className="result-card";
+
+if(student.hidden){
+
+const blocked=document.createElement("div");
+blocked.className="blocked-result";
+
+const title=document.createElement("div");
+title.textContent="تم حجب النتيجة";
+
+const reason=document.createElement("div");
+reason.textContent="سبب الحجب: "+
+(student.blockReason||"لم يتم تحديد السبب");
+
+blocked.append(title,reason);
+card.appendChild(blocked);
+resultArea.appendChild(card);
+return;
+
+}
+
+const title=document.createElement("h3");
+title.textContent="نتيجة الطالب";
+
+const info=document.createElement("div");
+info.className="student-info-box";
+
+info.innerHTML=`
+<div class="student-info-title">معلومات الطالب</div>
+
+<div class="student-info-item">
+<span>اسم الطالب</span>
+<strong>${student.name||"-"}</strong>
+</div>
+
+<div class="student-info-row">
+<div class="student-info-item">
+<span>الصف</span>
+<strong>${student.grade||"-"}</strong>
+</div>
+
+<div class="student-info-item">
+<span>الشعبة</span>
+<strong>${student.section||"-"}</strong>
+</div>
+</div>
+`;
+
+const wrap=document.createElement("div");
+wrap.className="result-table-wrap";
+
+const table=document.createElement("table");
+table.className="result-table";
+
+const thead=document.createElement("thead");
+const headerRow=document.createElement("tr");
+
+[
+"المادة","ش1","ش2","معدل1","نصف سنه",
+"ش1","ش2","معدل2","سعي سنوي","درجه نهائيه"
+    
+    ].forEach(text=>{
+const th=document.createElement("th");
+th.textContent=text;
+headerRow.appendChild(th);
+});
+
+thead.appendChild(headerRow);
+table.appendChild(thead);
+
+const tbody=document.createElement("tbody");
+
+(student.grades||[]).forEach(subject=>{
+
+const row=document.createElement("tr");
+
+const subjectCell=document.createElement("td");
+subjectCell.textContent=subject.subject||"";
+row.appendChild(subjectCell);
+
+for(let i=0;i<9;i++){
+const td=document.createElement("td");
+td.textContent=subject.grades?.[i]||"-";
+row.appendChild(td);
+}
+
+tbody.appendChild(row);
+
+});
+
+table.appendChild(tbody);
+wrap.appendChild(table);
+
+card.append(title,info,wrap);
+resultArea.appendChild(card);
+
+}
+
+searchButton.addEventListener("click",searchResult);
+
+searchInput.addEventListener("keydown",event=>{
+if(event.key==="Enter")searchResult();
+});
+
+</script>
+<style>
+.notes-result-box {
+    background: #fff8e8;
+    border: 2px solid #e6a23c;
+    border-radius: 10px;
+    padding: 14px;
+    margin-top: 15px;
+    text-align: right;
+    direction: rtl;
+}
+.notes-result-title {
+    font-weight: bold;
+    color: #9a6200;
+    margin-bottom: 8px;
+}
+.notes-result-text {
+    white-space: pre-wrap;
+    color: #222;
+}
+</style>
+
+<script>
+function showStudentNotes(student) {
+    const old = document.getElementById("studentNotesResult");
+    if (old) old.remove();
+
+    if (!student || student.hidden || !student.notes || !student.notes.trim()) return;
+
+    const box = document.createElement("div");
+    box.id = "studentNotesResult";
+    box.className = "notes-result-box";
+
+    const title = document.createElement("div");
+    title.className = "notes-result-title";
+    title.textContent = "الملاحظات";
+
+    const content = document.createElement("div");
+    content.className = "notes-result-text";
+    content.textContent = student.notes;
+
+    box.append(title, content);
+    document.getElementById("resultArea").appendChild(box);
+}
+</script>
+<style>
+/* ضبط صفحة البحث على الهاتف */
+html, body {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+}
+
+#resultArea {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    padding: 3px !important;
+    box-sizing: border-box !important;
+}
+
+#resultArea table {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+}
+
+#resultArea th,
+#resultArea td {
+    padding: 3px 1px !important;
+    font-size: 8px !important;
+    line-height: 1.4 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+    text-align: center !important;
+}
+
+@media (max-width: 480px) {
+    #resultArea th,
+    #resultArea td {
+        font-size: 7px !important;
+        padding: 2px 1px !important;
+    }
+}
+</style>
+<style>
+#resultArea td.low-grade {
+    color: #e00000 !important;
+    background-color: #ffe0e0 !important;
+    font-weight: bold !important;
+}
+</style>
+
+<script>
+function colorLowGrades() {
+    const area = document.getElementById("resultArea");
+    if (!area) return;
+
+    area.querySelectorAll("table td").forEach(td => {
+        const value = td.textContent.trim().replace(/[،,]/g, "");
+        const number = Number(value);
+
+        if (value !== "" && Number.isFinite(number) &&
+            number >= 0 && number < 50) {
+            td.classList.add("low-grade");
+        } else {
+            td.classList.remove("low-grade");
+        }
+    });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    colorLowGrades();
+
+    const area = document.getElementById("resultArea");
+    if (area) {
+        new MutationObserver(colorLowGrades).observe(area, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+    }
+});
+</script>
+
+<style>
+/* تقريب جدول النتائج من حافتي الشاشة */
+@media (max-width: 600px) {
+
+    .result-card {
+        padding: 10px 5px !important;
+    }
+
+    .result-table-wrap {
+        width: 100% !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+    }
+
+    #resultArea .result-table {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        table-layout: fixed !important;
+    }
+
+    #resultArea .result-table th,
+    #resultArea .result-table td {
+        font-size: 8px !important;
+        padding: 4px 1px !important;
+        line-height: 1.5 !important;
+        white-space: normal !important;
+        overflow-wrap: break-word !important;
+    }
+}
+</style>
+<style>
+@media (max-width: 600px) {
+
+    /* تصغير بسيط لأعمدة ش فقط */
+    #resultArea .result-table th:nth-child(2),
+    #resultArea .result-table td:nth-child(2),
+    #resultArea .result-table th:nth-child(3),
+    #resultArea .result-table td:nth-child(3),
+    #resultArea .result-table th:nth-child(6),
+    #resultArea .result-table td:nth-child(6),
+    #resultArea .result-table th:nth-child(7),
+    #resultArea .result-table td:nth-child(7) {
+        width: 8% !important;
+    }
+
+    /* توسيع عمود المادة قليلاً */
+    #resultArea .result-table th:first-child,
+    #resultArea .result-table td:first-child {
+        width: 18% !important;
+    }
+
+}
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("th").forEach(th => {
+        const name = th.textContent.trim();
+
+        if (name === "ش1") th.innerHTML = "شهر<br>1";
+        if (name === "ش2") th.innerHTML = "شهر<br>2";
+    });
+});
+</script>
+<script>
+(function () {
+    function changeHeaders() {
+        document.querySelectorAll("th, td").forEach(cell => {
+            const name = cell.textContent.trim().replace(/\s+/g, "");
+
+            if (name === "ش1") {
+                cell.innerHTML = "شهر<br>1";
+            }
+
+            if (name === "ش2") {
+                cell.innerHTML = "شهر<br>2";
+            }
+        });
+    }
+
+    changeHeaders();
+
+    new MutationObserver(changeHeaders).observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+})();
+</script>
+</style>
+<style>
+.student-info-box{
+    background:linear-gradient(135deg,#e3f0ff,#d5e8ff);
+    border:1px solid #8bb9e8;
+    border-radius:10px;
+    padding:10px 13px;
+    margin:5px 0 8px;
+    text-align:right;
+    direction:rtl;
+    box-shadow:0 2px 5px rgba(0,0,0,.10);
+    line-height:2;
+    color:#174b80;
+    font-size:14px;
+    font-weight:bold;
+}
+
+.student-info-box div{
+    padding:1px 0;
+}
+
+.student-info-box span{
+    color:#222;
+    font-weight:bold;
+    margin-right:4px;
+}
+
+.result-card h3{
+    margin-bottom:5px !important;
+}
+
+.result-table-wrap{
+    margin-top:0 !important;
+}
+</style>
+
+<script>
+(function(){
+    function formatStudentInfo(){
+        document.querySelectorAll(".result-info").forEach(info=>{
+            if(info.dataset.formatted==="yes") return;
+
+            const text=info.textContent;
+
+            const name=text.match(/اسم الطالب:\s*(.*?)\s*\|\s*الصف:/);
+            const grade=text.match(/الصف:\s*(.*?)\s*\|\s*الشعبة:/);
+            const section=text.match(/الشعبة:\s*(.*)/);
+
+            if(!name || !grade || !section) return;
+
+            const box=document.createElement("div");
+            box.className="student-info-box";
+
+            const nameRow=document.createElement("div");
+            nameRow.innerHTML="الاســم: <span></span>";
+            nameRow.querySelector("span").textContent=name[1];
+
+            const gradeRow=document.createElement("div");
+            gradeRow.innerHTML="الصـف: <span></span>";
+            gradeRow.querySelector("span").textContent=grade[1];
+
+            const sectionRow=document.createElement("div");
+            sectionRow.innerHTML="الشعبة: <span></span>";
+            sectionRow.querySelector("span").textContent=section[1];
+
+            box.append(nameRow,gradeRow,sectionRow);
+            info.replaceWith(box);
+        });
+    }
+
+    formatStudentInfo();
+
+    const observer=new MutationObserver(formatStudentInfo);
+    observer.observe(document.getElementById("resultArea"),{
+        childList:true,
+        subtree:true
+    });
+})();
+</script>
+<style>
+.student-info-box{
+    background:linear-gradient(135deg,#e3f0ff,#d5e8ff);
+    border:1px solid #8bb9e8;
+    border-radius:10px;
+    padding:10px 13px;
+    margin:5px 0 8px;
+    text-align:right;
+    direction:rtl;
+    box-shadow:0 2px 5px rgba(0,0,0,.10);
+    line-height:2;
+    color:#174b80;
+    font-size:14px;
+    font-weight:bold;
+}
+
+.student-info-box div{
+    padding:1px 0;
+}
+
+.student-info-box span{
+    color:#222;
+    font-weight:bold;
+    margin-right:4px;
+}
+
+.result-card h3{
+    margin-bottom:5px !important;
+}
+
+.result-table-wrap{
+    margin-top:0 !important;
+}
+</style>
+
+<script>
+(function(){
+    function formatStudentInfo(){
+        document.querySelectorAll(".result-info").forEach(info=>{
+            if(info.dataset.formatted==="yes") return;
+
+            const text=info.textContent;
+
+            const name=text.match(/اسم الطالب:\s*(.*?)\s*\|\s*الصف:/);
+            const grade=text.match(/الصف:\s*(.*?)\s*\|\s*الشعبة:/);
+            const section=text.match(/الشعبة:\s*(.*)/);
+
+            if(!name || !grade || !section) return;
+
+            const box=document.createElement("div");
+            box.className="student-info-box";
+
+            const nameRow=document.createElement("div");
+            nameRow.innerHTML="الاســم: <span></span>";
+            nameRow.querySelector("span").textContent=name[1];
+
+            const gradeRow=document.createElement("div");
+            gradeRow.innerHTML="الصـف: <span></span>";
+            gradeRow.querySelector("span").textContent=grade[1];
+
+            const sectionRow=document.createElement("div");
+            sectionRow.innerHTML="الشعبة: <span></span>";
+            sectionRow.querySelector("span").textContent=section[1];
+
+            box.append(nameRow,gradeRow,sectionRow);
+            info.replaceWith(box);
+        });
+    }
+
+    formatStudentInfo();
+
+    const observer=new MutationObserver(formatStudentInfo);
+    observer.observe(document.getElementById("resultArea"),{
+        childList:true,
+        subtree:true
+    });
+})();
+</script>
+<style>
+/* تثخين جميع خلايا جدول الدرجات */
+#resultArea .result-table th,
+#resultArea .result-table td{
+    font-weight:1000 !important;
+    -webkit-text-stroke:0.45px currentColor !important;
+    text-shadow:0.2px 0 currentColor,
+                -0.2px 0 currentColor !important;
+}
+
+/* تثخين أسماء المواد */
+#resultArea .result-table td:first-child{
+    -webkit-text-stroke:0.6px currentColor !important;
+}
+
+/* تثخين الأرقام */
+#resultArea .result-table td:not(:first-child){
+    font-weight:500 !important;
+    -webkit-text-stroke:0.5px currentColor !important;
+}
+</style>
+<style>
+#resultArea .result-table th,
+#resultArea .result-table td{
+    font-weight:500 !important;
+    -webkit-text-stroke:0 !important;
+    text-shadow:none !important;
+}
+</style>
+
+<style>
+/* ===== معلومات الطالب ===== */
+#resultArea .student-info-box {
+    background: linear-gradient(145deg,#eaf3ff,#d9eaff) !important;
+    border: 1px solid #a9c9ef !important;
+    border-radius: 15px !important;
+    padding: 14px !important;
+    margin: 12px 0 17px !important;
+    box-shadow: 0 4px 12px #194b821a !important;
+    direction: rtl !important;
+    text-align: right !important;
+    color: #173e6b !important;
+    font-size: 16px !important;
+    line-height: 1.8 !important;
+}
+
+#resultArea .student-info-title {
+    font-size: 19px !important;
+    font-weight: bold !important;
+    color: #0755a5 !important;
+    padding-bottom: 10px !important;
+    margin-bottom: 12px !important;
+    border-bottom: 2px solid #c2d9f4 !important;
+}
+
+#resultArea .student-info-item {
+    background: rgba(255,255,255,.85) !important;
+    border: 1px solid #d4e3f5 !important;
+    border-radius: 10px !important;
+    padding: 11px 12px !important;
+    margin: 0 0 9px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+}
+
+#resultArea .student-info-item span {
+    color: #6483a5 !important;
+    font-size: 13px !important;
+    margin: 0 !important;
+}
+
+#resultArea .student-info-item strong {
+    color: #153e6d !important;
+    font-size: 17px !important;
+    font-weight: bold !important;
+}
+
+#resultArea .student-info-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 9px !important;
+}
+
+/* ===== بطاقات المواد ===== */
+
+#resultArea .subjects-grid {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+    width: 100% !important;
+    margin-top: 15px !important;
+    direction: rtl !important;
+}
+
+#resultArea .subject-card {
+    background: white !important;
+    border: 1px solid #cbd9e9 !important;
+    border-radius: 14px !important;
+    padding: 12px !important;
+    box-shadow: 0 3px 10px #00000012 !important;
+    min-width: 0 !important;
+}
+
+#resultArea .subject-card-title {
+    background: linear-gradient(135deg,#0755a5,#1769bb) !important;
+    color: white !important;
+    font-size: 20px !important;
+    font-weight: bold !important;
+    text-align: center !important;
+    padding: 12px !important;
+    border-radius: 10px !important;
+    margin-bottom: 12px !important;
+}
+
+#resultArea .subject-grades-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+    gap: 8px !important;
+}
+
+#resultArea .grade-item {
+    background: #edf4fc !important;
+    border: 1px solid #d5e2f0 !important;
+    border-radius: 9px !important;
+    padding: 10px 3px !important;
+    min-width: 0 !important;
+    min-height: 78px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    text-align: center !important;
+    gap: 7px !important;
+}
+
+#resultArea .grade-label {
+    font-size: 12px !important;
+    font-weight: bold !important;
+    color: #24527f !important;
+    line-height: 1.5 !important;
+}
+
+#resultArea .grade-value {
+    font-size: 19px !important;
+    font-weight: bold !important;
+    color: #111 !important;
+}
+
+#resultArea .grade-item.low-grade {
+    background: #ffe7e7 !important;
+    border-color: #efaaaa !important;
+}
+
+#resultArea .grade-item.low-grade .grade-value {
+    color: #d00000 !important;
+}
+
+@media(max-width:400px) {
+    #resultArea .student-info-box {
+        padding: 11px !important;
+    }
+
+    #resultArea .student-info-item strong {
+        font-size: 15px !important;
+    }
+
+    #resultArea .subject-card {
+        padding: 9px !important;
+    }
+
+    #resultArea .grade-label {
+        font-size: 11px !important;
+    }
+
+    #resultArea .grade-value {
+        font-size: 17px !important;
+    }
+}
+</style>
+
+<script>
+(function(){
+
+    const labels = [
+        "الشهر الأول",
+        "الشهر الثاني",
+        "معدل الفصل الأول",
+        "نصف سنة",
+        "الشهر الأول",
+        "الشهر الثاني",
+        "معدل الفصل الثاني",
+        "سعي سنوي",
+        "درجة نهائية"
+    ];
+
+    function convertTables(){
+
+        document.querySelectorAll(
+            "#resultArea .result-table-wrap"
+        ).forEach(wrap => {
+
+            if(wrap.dataset.converted === "yes") return;
+
+            const table = wrap.querySelector(".result-table");
+            if(!table) return;
+
+            const rows = table.querySelectorAll("tbody tr");
+            if(!rows.length) return;
+
+            const container = document.createElement("div");
+            container.className = "subjects-grid";
+
+            rows.forEach(row => {
+
+                const cells = row.querySelectorAll("td");
+                if(!cells.length) return;
+
+                const subjectCard = document.createElement("div");
+                subjectCard.className = "subject-card";
+
+                const subjectTitle = document.createElement("div");
+                subjectTitle.className = "subject-card-title";
+                subjectTitle.textContent = cells[0].textContent.trim();
+
+                const grid = document.createElement("div");
+                grid.className = "subject-grades-grid";
+
+                for(let i = 0; i < 9; i++){
+
+                    const item = document.createElement("div");
+                    item.className = "grade-item";
+
+                    const label = document.createElement("span");
+                    label.className = "grade-label";
+                    label.textContent = labels[i];
+
+                    const value = document.createElement("strong");
+                    value.className = "grade-value";
+
+                    const grade = cells[i + 1]
+                        ? cells[i + 1].textContent.trim()
+                        : "-";
+
+                    value.textContent = grade || "-";
+
+                    const number = Number(
+                        grade.replace(/[،,]/g,"")
+                    );
+
+                    if(
+                        grade !== "" &&
+                        grade !== "-" &&
+                        Number.isFinite(number) &&
+                        number >= 0 &&
+                        number < 50
+                    ){
+                        item.classList.add("low-grade");
+                    }
+
+                    item.append(label,value);
+                    grid.appendChild(item);
+                }
+
+                subjectCard.append(subjectTitle,grid);
+                container.appendChild(subjectCard);
+            });
+
+            if(container.children.length){
+                wrap.replaceWith(container);
+                container.dataset.converted = "yes";
+            }
+        });
+    }
+
+    const area = document.getElementById("resultArea");
+
+    if(area){
+
+        const observer = new MutationObserver(convertTables);
+
+        observer.observe(area,{
+            childList:true,
+            subtree:true
+        });
+
+        convertTables();
+    }
+
+})();
+</script>
+
+<style>
+/* شكل قائمة المواد */
+.compact-results {
+  direction: rtl;
+  width: 100%;
+  margin-top: 10px;
+  font-family: inherit;
+}
+
+.compact-hint {
+  font-size: 12px;
+  color: #64748b;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 9px;
+  text-align: right;
+}
+
+.subject-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 7px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.subject-toggle {
+  width: 100%;
+  border: 0;
+  background: #fff;
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: right;
+  font: inherit;
+  cursor: pointer;
+  color: #1e293b;
+}
+
+.subject-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.final-grade {
+  font-size: 12px;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.final-grade strong {
+  color: #0f766e;
+  font-size: 14px;
+  margin-right: 4px;
+}
+
+.subject-arrow {
+  color: #64748b;
+  font-size: 17px;
+  transition: transform .2s;
+}
+
+.subject-item.open .subject-arrow {
+  transform: rotate(180deg);
+}
+
+.subject-details {
+  display: none;
+  padding: 10px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.subject-item.open .subject-details {
+  display: block;
+}
+
+.grades-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.grade-cell {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  padding: 7px 4px;
+  text-align: center;
+  min-width: 0;
+}
+
+.grade-label {
+  display: block;
+  font-size: 10px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.grade-value {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  overflow-wrap: anywhere;
+}
+
+.student-info-box {
+  border-radius: 12px !important;
+  padding: 12px !important;
+}
+
+.student-info-title {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  margin-bottom: 10px !important;
+}
+
+.student-info-item {
+  font-size: 13px !important;
+}
+
+</style>
+
+<script>
+(function () {
+  const gradeLabels = [
+    "الشهر الأول",
+    "الشهر الثاني",
+    "معدل الفصل الأول",
+    "نصف السنة",
+    "الشهر الأول",
+    "الشهر الثاني",
+    "معدل الفصل الثاني",
+    "السعي السنوي",
+    "الدرجة النهائية"
+  ];
+
+  function convertResults() {
+    const area = document.getElementById("resultArea");
+    if (!area) return;
+
+    area.querySelectorAll(".result-table-wrap").forEach(wrap => {
+      if (wrap.dataset.compactReady === "1") return;
+
+      const table = wrap.querySelector(".result-table");
+      if (!table) return;
+
+      const rows = Array.from(table.querySelectorAll("tbody tr"));
+      if (!rows.length) return;
+
+      const list = document.createElement("div");
+      list.className = "compact-results";
+
+      const hint = document.createElement("div");
+      hint.className = "compact-hint";
+      hint.textContent = "اضغط على السهم بجانب المادة لعرض درجاتها";
+      list.appendChild(hint);
+
+      rows.forEach(row => {
+        const cells = Array.from(row.querySelectorAll("td"));
+        if (cells.length < 10) return;
+
+        const item = document.createElement("div");
+        item.className = "subject-item";
+
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "subject-toggle";
+
+        const name = document.createElement("span");
+        name.className = "subject-name";
+        name.textContent = cells[0].textContent.trim();
+
+        const finalGrade = document.createElement("span");
+        finalGrade.className = "final-grade";
+        finalGrade.append("الدرجة النهائية");
+
+        const finalValue = document.createElement("strong");
+        finalValue.textContent = cells[9].textContent.trim() || "-";
+        finalGrade.appendChild(finalValue);
+
+        const arrow = document.createElement("span");
+        arrow.className = "subject-arrow";
+        arrow.textContent = "⌄";
+
+        toggle.append(name, finalGrade, arrow);
+
+        const details = document.createElement("div");
+        details.className = "subject-details";
+
+        const grid = document.createElement("div");
+        grid.className = "grades-grid";
+
+        for (let i = 0; i < 9; i++) {
+          const cell = document.createElement("div");
+          cell.className = "grade-cell";
+
+          const label = document.createElement("span");
+          label.className = "grade-label";
+          label.textContent = gradeLabels[i];
+
+          const value = document.createElement("span");
+          value.className = "grade-value";
+          value.textContent = cells[i + 1].textContent.trim() || "-";
+
+          cell.append(label, value);
+          grid.appendChild(cell);
+        }
+
+        details.appendChild(grid);
+        toggle.addEventListener("click", () => {
+          item.classList.toggle("open");
+        });
+
+        item.append(toggle, details);
+        list.appendChild(item);
+      });
+
+      if (list.querySelector(".subject-item")) {
+        wrap.replaceWith(list);
+        list.dataset.compactReady = "1";
+        wrap.dataset.compactReady = "1";
+      }
+    });
+  }
+
+  function start() {
+    const area = document.getElementById("resultArea");
+    if (!area) {
+      setTimeout(start, 300);
+      return;
+    }
+
+    convertResults();
+
+    const observer = new MutationObserver(convertResults);
+    observer.observe(area, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  start();
+})();
+</script>
+<style>
+/* معلومات الطالب */
+#resultArea .student-info-box {
+    background: linear-gradient(145deg,#eaf3ff,#d9eaff) !important;
+    border: 1px solid #a9c9ef !important;
+    border-radius: 15px !important;
+    padding: 14px !important;
+    margin: 12px 0 17px !important;
+    box-shadow: 0 4px 12px #194b821a !important;
+    direction: rtl !important;
+    text-align: right !important;
+    color: #173e6b !important;
+    font-size: 16px !important;
+    line-height: 1.8 !important;
+}
+
+#resultArea .student-info-title {
+    font-size: 19px !important;
+    font-weight: bold !important;
+    color: #0755a5 !important;
+    padding-bottom: 10px !important;
+    margin-bottom: 12px !important;
+    border-bottom: 2px solid #c2d9f4 !important;
+}
+
+#resultArea .student-info-item {
+    background: rgba(255,255,255,.85) !important;
+    border: 1px solid #d4e3f5 !important;
+    border-radius: 10px !important;
+    padding: 11px 12px !important;
+    margin-bottom: 9px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+}
+
+#resultArea .student-info-item span {
+    color: #6483a5 !important;
+    font-size: 13px !important;
+}
+
+#resultArea .student-info-item strong {
+    color: #153e6d !important;
+    font-size: 17px !important;
+    font-weight: bold !important;
+}
+
+#resultArea .student-info-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 9px !important;
+}
+
+/* قائمة المواد المختصرة */
+.compact-results {
+    direction: rtl;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.compact-hint {
+    font-size: 11px;
+    color: #64748b;
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 9px;
+    text-align: right;
+}
+
+.subject-item {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    margin-bottom: 7px;
+    overflow: hidden;
+    background: #fff;
+}
+
+.subject-toggle {
+    width: 100%;
+    border: 0;
+    background: #fff;
+    padding: 11px 10px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    text-align: right;
+    font: inherit;
+    cursor: pointer;
+    color: #1e293b;
+}
+
+.subject-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.final-grade {
+    font-size: 11px;
+    color: #475569;
+    white-space: nowrap;
+}
+
+.final-grade strong {
+    color: #0f766e;
+    font-size: 14px;
+    margin-right: 3px;
+}
+
+.subject-arrow {
+    color: #64748b;
+    font-size: 17px;
+    transition: transform .2s;
+}
+
+.subject-item.open .subject-arrow {
+    transform: rotate(180deg);
+}
+
+.subject-details {
+    display: none;
+    padding: 9px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+}
+
+.subject-item.open .subject-details {
+    display: block;
+}
+
+.grades-grid {
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 7px;
+}
+
+.grade-cell {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 7px;
+    padding: 7px 3px;
+    text-align: center;
+    min-width: 0;
+}
+
+.grade-label {
+    display: block;
+    font-size: 10px;
+    color: #64748b;
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.grade-value {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    overflow-wrap: anywhere;
+}
+
+@media(max-width:400px) {
+    .subject-name {font-size:13px}
+    .final-grade {font-size:10px}
+    .grade-label {font-size:9px}
+    .grade-value {font-size:12px}
+    #resultArea .student-info-item strong {font-size:15px}
+}
+</style>
+
+<script>
+(function () {
+    const labels = [
+        "الشهر الأول",
+        "الشهر الثاني",
+        "معدل الفصل الأول",
+        "نصف السنة",
+        "الشهر الأول",
+        "الشهر الثاني",
+        "معدل الفصل الثاني",
+        "السعي السنوي",
+        "الدرجة النهائية"
+    ];
+
+    function convertResults() {
+        const area = document.getElementById("resultArea");
+        if (!area) return;
+
+        area.querySelectorAll(".subjects-grid").forEach(oldGrid => {
+            if (oldGrid.dataset.compactReady === "yes") return;
+
+            const cards = Array.from(
+                oldGrid.querySelectorAll(".subject-card")
+            );
+
+            if (!cards.length) return;
+
+            const list = document.createElement("div");
+            list.className = "compact-results";
+
+            const hint = document.createElement("div");
+            hint.className = "compact-hint";
+            hint.textContent = "انقر على السهم بجانب المادة لعرض الدرجات";
+            list.appendChild(hint);
+
+            cards.forEach(card => {
+                const title = card.querySelector(".subject-card-title");
+                const grades = card.querySelectorAll(".grade-item");
+
+                if (!title || !grades.length) return;
+
+                const item = document.createElement("div");
+                item.className = "subject-item";
+
+                const toggle = document.createElement("button");
+                toggle.type = "button";
+                toggle.className = "subject-toggle";
+
+                const name = document.createElement("span");
+                name.className = "subject-name";
+                name.textContent = title.textContent.trim();
+
+                const finalGrade = document.createElement("span");
+                finalGrade.className = "final-grade";
+                finalGrade.append("الدرجة النهائية");
+
+                const finalValue = document.createElement("strong");
+                finalValue.textContent =
+                    grades[8]?.querySelector(".grade-value")?.textContent.trim() || "-";
+
+                finalGrade.appendChild(finalValue);
+
+                const arrow = document.createElement("span");
+                arrow.className = "subject-arrow";
+                arrow.textContent = "⌄";
+
+                toggle.append(name, finalGrade, arrow);
+
+                const details = document.createElement("div");
+                details.className = "subject-details";
+
+                const grid = document.createElement("div");
+                grid.className = "grades-grid";
+
+                grades.forEach((grade, i) => {
+                    const cell = document.createElement("div");
+                    cell.className = "grade-cell";
+
+                    const label = document.createElement("span");
+                    label.className = "grade-label";
+                    label.textContent = labels[i] || "";
+
+                    const value = document.createElement("span");
+                    value.className = "grade-value";
+                    value.textContent =
+                        grade.querySelector(".grade-value")?.textContent.trim() || "-";
+
+                    cell.append(label, value);
+                    grid.appendChild(cell);
+                });
+
+                details.appendChild(grid);
+
+                toggle.addEventListener("click", () => {
+                    item.classList.toggle("open");
+                });
+
+                item.append(toggle, details);
+                list.appendChild(item);
+            });
+
+            if (list.querySelector(".subject-item")) {
+                oldGrid.replaceWith(list);
+                list.dataset.compactReady = "yes";
+            }
+        });
+    }
+
+    const area = document.getElementById("resultArea");
+
+    if (area) {
+        const observer = new MutationObserver(convertResults);
+        observer.observe(area, {
+            childList: true,
+            subtree: true
+        });
+
+        convertResults();
+    }
+})();
+</script>
+<style>
+/* قائمة المواد */
+.compact-results {
+    direction: rtl;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.subject-item {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+
+.subject-toggle {
+    width: 100%;
+    border: none;
+    background: #fff;
+    padding: 12px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: right;
+    font: inherit;
+    cursor: pointer;
+    direction: rtl;
+}
+
+.subject-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: bold;
+    color: #1e293b;
+}
+
+.subject-hint {
+    color: #64748b;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.subject-arrow {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0755a5;
+    color: #fff !important;
+    border-radius: 50%;
+    font-size: 25px;
+    font-weight: bold;
+    line-height: 1;
+    transition: transform .25s, background .25s;
+}
+
+.subject-item.open .subject-arrow {
+    transform: rotate(180deg);
+    background: #0f766e;
+}
+
+/* الدرجات المخفية */
+.subject-details {
+    display: none;
+    padding: 10px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+}
+
+.subject-item.open .subject-details {
+    display: block;
+}
+
+.grades-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.grade-cell {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px 3px;
+    text-align: center;
+    min-width: 0;
+}
+
+.grade-label {
+    display: block;
+    font-size: 10px;
+    color: #64748b;
+    margin-bottom: 5px;
+    line-height: 1.4;
+}
+
+.grade-value {
+    display: block;
+    font-size: 13px;
+    font-weight: bold;
+    color: #1e293b;
+    overflow-wrap: anywhere;
+}
+
+@media(max-width:400px) {
+    .subject-name {
+        font-size: 13px;
+    }
+
+    .subject-hint {
+        font-size: 9px;
+    }
+
+    .grades-grid {
+        gap: 5px;
+    }
+
+    .grade-label {
+        font-size: 9px;
+    }
+
+    .grade-value {
+        font-size: 12px;
+    }
+}
+</style>
+
+<script>
+(function () {
+
+    const labels = [
+        "الشهر الأول",
+        "الشهر الثاني",
+        "معدل الفصل الأول",
+        "نصف السنة",
+        "الشهر الأول",
+        "الشهر الثاني",
+        "معدل الفصل الثاني",
+        "السعي السنوي",
+        "الدرجة النهائية"
+    ];
+
+    function convertResults() {
+
+        const area = document.getElementById("resultArea");
+        if (!area) return;
+
+        area.querySelectorAll(".subjects-grid").forEach(oldGrid => {
+
+            if (oldGrid.dataset.compactReady === "yes") return;
+
+            const cards = Array.from(
+                oldGrid.querySelectorAll(".subject-card")
+            );
+
+            if (!cards.length) return;
+
+            const list = document.createElement("div");
+            list.className = "compact-results";
+
+            cards.forEach(card => {
+
+                const title = card.querySelector(".subject-card-title");
+                const grades = card.querySelectorAll(".grade-item");
+
+                if (!title || !grades.length) return;
+
+                const item = document.createElement("div");
+                item.className = "subject-item";
+
+                const toggle = document.createElement("button");
+                toggle.type = "button";
+                toggle.className = "subject-toggle";
+
+                const name = document.createElement("span");
+                name.className = "subject-name";
+                name.textContent = title.textContent.trim();
+
+                const hint = document.createElement("span");
+                hint.className = "subject-hint";
+                hint.textContent = "انقر على السهم لعرض كافة الدرجات";
+
+                const arrow = document.createElement("span");
+                arrow.className = "subject-arrow";
+                arrow.textContent = "⌄";
+
+                toggle.append(name, hint, arrow);
+
+                const details = document.createElement("div");
+                details.className = "subject-details";
+
+                const grid = document.createElement("div");
+                grid.className = "grades-grid";
+
+                grades.forEach((grade, i) => {
+
+                    const cell = document.createElement("div");
+                    cell.className = "grade-cell";
+
+                    const label = document.createElement("span");
+                    label.className = "grade-label";
+                    label.textContent = labels[i] || "";
+
+                    const value = document.createElement("span");
+                    value.className = "grade-value";
+                    value.textContent =
+                        grade.querySelector(".grade-value")?.textContent.trim() || "-";
+
+                    cell.append(label, value);
+                    grid.appendChild(cell);
+                });
+
+                details.appendChild(grid);
+
+                toggle.addEventListener("click", () => {
+                    item.classList.toggle("open");
+                });
+
+                item.append(toggle, details);
+                list.appendChild(item);
+            });
+
+            if (list.querySelector(".subject-item")) {
+                oldGrid.replaceWith(list);
+                list.dataset.compactReady = "yes";
+            }
+        });
+    }
+
+    const area = document.getElementById("resultArea");
+
+    if (area) {
+        const observer = new MutationObserver(convertResults);
+
+        observer.observe(area, {
+            childList: true,
+            subtree: true
+        });
+
+        convertResults();
+    }
+
+})();
+</script>
+<style>
+/* إخفاء شريط التعليمات القديم */
+.compact-hint {
+    display: none !important;
+}
+
+/* مستطيل المادة */
+.subject-item {
+    width: 100%;
+    background: #fff !important;
+    border: 1px solid #e8edf3 !important;
+    border-radius: 12px !important;
+    margin-bottom: 8px !important;
+    overflow: hidden;
+    box-shadow: 0 2px 6px rgba(30,60,90,.035);
+}
+
+/* صف المادة */
+.subject-toggle {
+    width: 100% !important;
+    min-height: 58px !important;
+    padding: 9px 13px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 9px !important;
+    direction: rtl !important;
+    justify-content: flex-start !important;
+    background: #fff !important;
+    border: none !important;
+    cursor: pointer;
+    font: inherit;
+}
+
+/* اسم المادة على اليمين */
+.subject-name {
+    order: 1 !important;
+    flex: 1 !important;
+    min-width: 0;
+    text-align: right !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    color: #26384d !important;
+}
+
+/* إخفاء الدرجة النهائية */
+.final-grade {
+    display: none !important;
+}
+
+/* عبارة التوضيح */
+.subject-hint {
+    order: 2 !important;
+    color: #8493a5 !important;
+    font-size: 10px !important;
+    white-space: nowrap !important;
+    text-align: left;
+}
+
+/* السهم الأنيق */
+.subject-arrow {
+    order: 3 !important;
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    color: transparent !important;
+    font-size: 0 !important;
+    position: relative !important;
+    transition: transform .25s ease !important;
+}
+
+.subject-arrow::after {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-right: 2px solid #2876bd;
+    border-bottom: 2px solid #2876bd;
+    transform: rotate(45deg);
+    margin-top: -5px;
+    border-radius: 1px;
+}
+
+/* عند فتح الدرجات */
+.subject-item.open .subject-arrow {
+    transform: rotate(180deg);
+}
+
+/* منطقة الدرجات */
+.subject-details {
+    display: none;
+    padding: 10px !important;
+    background: #f8faff !important;
+    border-top: 1px solid #edf1f6 !important;
+}
+
+.subject-item.open .subject-details {
+    display: block;
+}
+
+/* شبكة الدرجات */
+.grades-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.grade-cell {
+    background: #fff !important;
+    border: 1px solid #e5ebf2 !important;
+    border-radius: 8px !important;
+    padding: 8px 3px !important;
+    text-align: center;
+    min-width: 0;
+}
+
+.grade-label {
+    display: block;
+    font-size: 10px !important;
+    color: #64748b !important;
+    margin-bottom: 5px;
+    line-height: 1.4;
+}
+
+.grade-value {
+    display: block;
+    font-size: 13px !important;
+    font-weight: bold !important;
+    color: #1e293b !important;
+    overflow-wrap: anywhere;
+}
+
+/* تنسيق الموبايل */
+@media(max-width:400px) {
+    .subject-toggle {
+        padding: 8px !important;
+        gap: 5px !important;
+    }
+
+    .subject-name {
+        font-size: 13px !important;
+    }
+
+    .subject-hint {
+        font-size: 9px !important;
+    }
+
+    .grades-grid {
+        gap: 5px;
+    }
+
+    .grade-label {
+        font-size: 9px !important;
+    }
+
+    .grade-value {
+        font-size: 12px !important;
+    }
+}
+</style>
+
+<script>
+(function () {
+
+    const labels = [
+        "الشهر الأول",
+        "الشهر الثاني",
+        "معدل الفصل الأول",
+        "نصف السنة",
+        "الشهر الأول",
+        "الشهر الثاني",
+        "معدل الفصل الثاني",
+        "السعي السنوي",
+        "الدرجة النهائية"
+    ];
+
+    function convertResults() {
+
+        const area = document.getElementById("resultArea");
+        if (!area) return;
+
+        area.querySelectorAll(".subjects-grid").forEach(oldGrid => {
+
+            if (oldGrid.dataset.compactReady === "yes") return;
+
+            const cards = Array.from(
+                oldGrid.querySelectorAll(".subject-card")
+            );
+
+            if (!cards.length) return;
+
+            const list = document.createElement("div");
+            list.className = "compact-results";
+
+            cards.forEach(card => {
+
+                const title = card.querySelector(".subject-card-title");
+                const grades = card.querySelectorAll(".grade-item");
+
+                if (!title || !grades.length) return;
+
+                const item = document.createElement("div");
+                item.className = "subject-item";
+
+                const toggle = document.createElement("button");
+                toggle.type = "button";
+                toggle.className = "subject-toggle";
+
+                const name = document.createElement("span");
+                name.className = "subject-name";
+                name.textContent = title.textContent.trim();
+
+                const hint = document.createElement("span");
+                hint.className = "subject-hint";
+                hint.textContent = "انقر على السهم لعرض كافة الدرجات";
+
+                const arrow = document.createElement("span");
+                arrow.className = "subject-arrow";
+                arrow.textContent = "⌄";
+
+                toggle.append(name, hint, arrow);
+
+                const details = document.createElement("div");
+                details.className = "subject-details";
+
+                const grid = document.createElement("div");
+                grid.className = "grades-grid";
+
+                grades.forEach((grade, i) => {
+
+                    const cell = document.createElement("div");
+                    cell.className = "grade-cell";
+
+                    const label = document.createElement("span");
+                    label.className = "grade-label";
+                    label.textContent = labels[i] || "";
+
+                    const value = document.createElement("span");
+                    value.className = "grade-value";
+
+                    value.textContent =
+                        grade.querySelector(".grade-value")?.textContent.trim() || "-";
+
+                    cell.append(label, value);
+                    grid.appendChild(cell);
+                });
+
+                details.appendChild(grid);
+
+                toggle.addEventListener("click", function () {
+                    item.classList.toggle("open");
+                });
+
+                item.append(toggle, details);
+                list.appendChild(item);
+            });
+
+            if (list.querySelector(".subject-item")) {
+                oldGrid.replaceWith(list);
+                list.dataset.compactReady = "yes";
+            }
+        });
+    }
+
+    const area = document.getElementById("resultArea");
+
+    if (area) {
+        const observer = new MutationObserver(convertResults);
+
+        observer.observe(area, {
+            childList: true,
+            subtree: true
+        });
+
+        convertResults();
+    }
+
+})();
+</script>
+<style>
+.subject-toggle {
+    display: flex !important;
+    direction: rtl !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 7px !important;
+}
+
+.subject-name {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+.subject-hint {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    flex: 0 0 auto !important;
+    color: #8493a5 !important;
+    font-size: 10px !important;
+    white-space: nowrap !important;
+}
+
+.subject-arrow {
+    flex: 0 0 22px !important;
+}
+</style>
+
+<script>
+(function () {
+    function showHint() {
+        document.querySelectorAll(".subject-toggle").forEach(toggle => {
+            let hint = toggle.querySelector(".subject-hint");
+
+            if (!hint) {
+                hint = document.createElement("span");
+                hint.className = "subject-hint";
+                hint.textContent = "انقر على السهم لعرض كافة الدرجات";
+
+                const arrow = toggle.querySelector(".subject-arrow");
+                if (arrow) {
+                    toggle.insertBefore(hint, arrow);
+                }
+            }
+        });
+    }
+
+    showHint();
+
+    const area = document.getElementById("resultArea");
+    if (area) {
+        new MutationObserver(showHint).observe(area, {
+            childList: true,
+            subtree: true
+        });
+    }
+})();
+</script>
+<style>
+.subject-toggle {
+    display: grid !important;
+    grid-template-columns: 1fr 28px !important;
+    grid-template-areas:
+        "name arrow"
+        "hint hint" !important;
+    align-items: center !important;
+    justify-items: stretch !important;
+    gap: 5px 8px !important;
+    padding: 12px 13px !important;
+    direction: rtl !important;
+}
+
+.subject-name {
+    grid-area: name !important;
+    text-align: right !important;
+    flex: unset !important;
+    font-size: 14px !important;
+    margin: 0 !important;
+}
+
+.subject-arrow {
+    grid-area: arrow !important;
+    justify-self: center !important;
+}
+
+.subject-hint {
+    grid-area: hint !important;
+    display: block !important;
+    width: 100% !important;
+    text-align: center !important;
+    color: #d64545 !important;
+    font-size: 11px !important;
+    white-space: normal !important;
+    margin: 2px 0 0 !important;
+}
+
+@media(max-width:400px) {
+    .subject-hint {
+        font-size: 10px !important;
+    }
+}
+</style>
+<style>
+/* تقليل ارتفاع مربعات الدرجات مع الحفاظ على التصميم الأول */
+#resultArea .subject-details {
+    padding: 6px !important;
+}
+
+#resultArea .grades-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 5px !important;
+}
+
+#resultArea .grade-cell {
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 3px 2px !important;
+    border-radius: 7px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 1px !important;
+}
+
+#resultArea .grade-label {
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-weight: bold !important;
+}
+
+#resultArea .grade-value {
+    font-size: 12px !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-weight: bold !important;
+}
+
+@media(max-width:400px) {
+    #resultArea .grade-cell {
+        padding: 2px 1px !important;
+    }
+
+    #resultArea .grade-label {
+        font-size: 8px !important;
+    }
+
+    #resultArea .grade-value {
+        font-size: 11px !important;
+    }
+}
+</style>
+<style>
+#resultArea .grade-label {
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    color: #294968 !important;
+    line-height: 1.3 !important;
+}
+
+#resultArea .grade-value {
+    font-size: 12px !important;
+}
+</style>
+<style>
+/* تصغير عناوين محددة فقط */
+#resultArea .grade-cell:nth-child(3) .grade-label,
+#resultArea .grade-cell:nth-child(7) .grade-label,
+#resultArea .grade-cell:nth-child(8) .grade-label,
+#resultArea .grade-cell:nth-child(9) .grade-label {
+    font-size: 10.5px !important;
+    line-height: 1.3 !important;
+}
+
+@media (max-width: 400px) {
+    #resultArea .grade-cell:nth-child(3) .grade-label,
+    #resultArea .grade-cell:nth-child(7) .grade-label,
+    #resultArea .grade-cell:nth-child(8) .grade-label,
+    #resultArea .grade-cell:nth-child(9) .grade-label {
+        font-size: 10px !important;
+    }
+}
+</style>
+<style>
+/* تقليل ارتفاع مربعات الدرجات مع الحفاظ على التصميم الأول */
+#resultArea .subject-details {
+    padding: 6px !important;
+}
+
+#resultArea .grades-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 5px !important;
+}
+
+#resultArea .grade-cell {
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 3px 2px !important;
+    border-radius: 7px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 1px !important;
+}
+
+#resultArea .grade-label {
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-weight: bold !important;
+}
+
+#resultArea .grade-value {
+    font-size: 12px !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-weight: bold !important;
+}
+
+@media(max-width:400px) {
+    #resultArea .grade-cell {
+        padding: 2px 1px !important;
+    }
+
+    #resultArea .grade-label {
+        font-size: 8px !important;
+    }
+
+    #resultArea .grade-value {
+        font-size: 11px !important;
+    }
+}
+</style>
+<style>
+/* تقليل ارتفاع مربعات الدرجات مع الحفاظ على التصميم الأول */
+#resultArea .subject-details {
+    padding: 6px !important;
+}
+
+#resultArea .grades-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 5px !important;
+}
+
+#resultArea .grade-cell {
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 3px 2px !important;
+    border-radius: 7px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 1px !important;
+}
+
+#resultArea .grade-label {
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-weight: bold !important;
+}
+
+#resultArea .grade-value {
+    font-size: 12px !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-weight: bold !important;
+}
+
+@media(max-width:400px) {
+    #resultArea .grade-cell {
+        padding: 2px 1px !important;
+    }
+
+    #resultArea .grade-label {
+        font-size: 8px !important;
+    }
+
+    #resultArea .grade-value {
+        font-size: 11px !important;
+    }
+}
+</style>
+<style>
+/* التصميم الجديد لمربعات الدرجات */
+#resultArea .grades-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 10px 7px !important;
+    direction: rtl !important;
+}
+
+#resultArea .grade-cell {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 2px 1px !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: center !important;
+    gap: 5px !important;
+}
+
+#resultArea .grade-label {
+    display: block !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    color: #31577d !important;
+    text-align: center !important;
+    line-height: 1.4 !important;
+    margin: 0 !important;
+}
+
+#resultArea .grade-value {
+    display: block !important;
+    width: 100% !important;
+    background: #e8f0f8 !important;
+    color: #214d78 !important;
+    border: none !important;
+    border-radius: 30px !important;
+    padding: 7px 2px !important;
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    text-align: center !important;
+    line-height: 1.3 !important;
+}
+
+#resultArea .grade-cell:has(.grade-label) {
+    box-shadow: none !important;
+}
+</style>
+<script>
+document.querySelectorAll("#resultArea .grade-label").forEach(label => {
+    if (label.textContent.trim() === "معدل الفصل الأول") {
+        label.textContent = "الفصل الأول";
+    }
+
+    if (label.textContent.trim() === "معدل الفصل الثاني") {
+        label.textContent = "الفصل الثاني";
+    }
+});
+</script>
+<script>
+(function () {
+    function تعديل_التسميات() {
+        document.querySelectorAll("#resultArea .grade-label").forEach(function(label) {
+            const الاسم = label.textContent.trim();
+
+            if (الاسم === "معدل الفصل الأول") {
+                label.textContent = "الفصل الأول";
+            } else if (الاسم === "معدل الفصل الثاني") {
+                label.textContent = "الفصل الثاني";
+            }
+        });
+    }
+
+    const المراقب = new MutationObserver(تعديل_التسميات);
+
+    function تشغيل() {
+        const المنطقة = document.getElementById("resultArea");
+        if (المنطقة) {
+            تعديل_التسميات();
+            المراقب.observe(المنطقة, {
+                childList: true,
+                subtree: true,
+                characterData: true
+            });
+        }
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", تشغيل);
+    } else {
+        تشغيل();
+    }
+})();
+</script>
+
+<style>
+/* ===== التصميم الجديد لواجهة البحث ===== */
+
+body {
+    background: #f1f5fa !important;
+    font-family: Arial, sans-serif !important;
+    color: #172b45 !important;
+}
+
+/* اللافتة العلوية */
+.header {
+    position: relative !important;
+    overflow: hidden !important;
+    width: 100% !important;
+    padding: 30px 15px 27px !important;
+    background: linear-gradient(125deg,#102b4e,#0755a5 58%,#1675b9) !important;
+    color: #fff !important;
+    text-align: center !important;
+    box-shadow: 0 7px 22px rgba(10,43,78,.20) !important;
+    border-bottom: 4px solid #d6b66b !important;
+}
+
+.header::before {
+    content: "";
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 50%;
+    top: -160px;
+    right: -65px;
+    box-shadow: 0 0 0 25px rgba(255,255,255,.035),
+                0 0 0 55px rgba(255,255,255,.025);
+    pointer-events: none;
+}
+
+.header::after {
+    content: "";
+    position: absolute;
+    width: 220px;
+    height: 220px;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 50%;
+    bottom: -175px;
+    left: -65px;
+    box-shadow: 0 0 0 25px rgba(255,255,255,.03);
+    pointer-events: none;
+}
+
+.header div {
+    position: relative !important;
+    z-index: 1 !important;
+    line-height: 1.8 !important;
+}
+
+.ministry {
+    font-size: 22px !important;
+    font-weight: 800 !important;
+    color: #fff !important;
+}
+
+.directorate {
+    font-size: 19px !important;
+    font-weight: 700 !important;
+    color: #e5efff !important;
+}
+
+.school {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    color: #fff !important;
+}
+
+.system {
+    display: inline-block !important;
+    margin-top: 13px !important;
+    padding: 7px 23px !important;
+    border: 1px solid rgba(255,255,255,.35) !important;
+    border-radius: 30px !important;
+    background: rgba(255,255,255,.12) !important;
+    color: #ffe3a0 !important;
+    font-size: 22px !important;
+    font-weight: 800 !important;
+}
+
+/* صندوق البحث */
+.search-container {
+    width: 92% !important;
+    max-width: 650px !important;
+    margin: 45px auto !important;
+    padding: 28px !important;
+    background: #fff !important;
+    border: 1px solid #e0e8f1 !important;
+    border-radius: 20px !important;
+    box-shadow: 0 8px 28px rgba(20,55,90,.10) !important;
+}
+
+/* عنوان البحث */
+.search-title {
+    text-align: center !important;
+    font-size: 23px !important;
+    font-weight: 800 !important;
+    color: #173f68 !important;
+    margin-bottom: 9px !important;
+}
+
+.search-title::after {
+    content: "";
+    display: block;
+    width: 55px;
+    height: 3px;
+    margin: 11px auto 20px;
+    border-radius: 10px;
+    background: #d6b66b;
+}
+
+/* حقل الاسم */
+.search-input {
+    display: block !important;
+    width: 100% !important;
+    height: 59px !important;
+    padding: 12px 17px !important;
+    background: #f5f8fc !important;
+    border: 1.5px solid #d8e2ef !important;
+    border-radius: 13px !important;
+    outline: none !important;
+    color: #173f68 !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    text-align: right !important;
+    transition: .2s ease !important;
+}
+
+.search-input::placeholder {
+    color: #8b9bad !important;
+    font-weight: 400 !important;
+}
+
+.search-input:focus {
+    background: #fff !important;
+    border: 2px solid #1769ad !important;
+    box-shadow: 0 0 0 4px rgba(23,105,173,.10) !important;
+}
+
+/* زر البحث */
+.search-button {
+    display: block !important;
+    width: 100% !important;
+    height: 57px !important;
+    margin-top: 16px !important;
+    background: linear-gradient(120deg,#104b80,#1269ad) !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 13px !important;
+    font-size: 19px !important;
+    font-weight: 800 !important;
+    cursor: pointer !important;
+    box-shadow: 0 5px 13px rgba(18,83,137,.20) !important;
+    transition: .2s ease !important;
+}
+
+.search-button:active {
+    transform: scale(.985) !important;
+    background: #103f6b !important;
+}
+
+.search-button:disabled {
+    opacity: .65 !important;
+    cursor: wait !important;
+}
+
+/* رسائل البحث */
+.message {
+    color: #31516f !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    line-height: 1.9 !important;
+    margin-top: 18px !important;
+}
+
+/* مساحة النتائج */
+#resultArea {
+    margin-top: 20px !important;
+}
+
+/* ===== الحاسبة والآيباد ===== */
+@media (min-width: 768px) {
+    .header {
+        padding: 35px 20px 30px !important;
+    }
+
+    .ministry {
+        font-size: 24px !important;
+    }
+
+    .directorate {
+        font-size: 21px !important;
+    }
+
+    .school {
+        font-size: 20px !important;
+    }
+
+    .system {
+        font-size: 24px !important;
+    }
+
+    .search-container {
+        margin-top: 55px !important;
+        padding: 32px !important;
+    }
+}
+
+/* ===== الموبايل ===== */
+@media (max-width: 600px) {
+    .header {
+        padding: 22px 10px 21px !important;
+    }
+
+    .ministry {
+        font-size: 20px !important;
+    }
+
+    .directorate {
+        font-size: 17px !important;
+    }
+
+    .school {
+        font-size: 16px !important;
+    }
+
+    .system {
+        font-size: 19px !important;
+        padding: 6px 17px !important;
+        margin-top: 9px !important;
+    }
+
+    .search-container {
+        width: 93% !important;
+        margin: 28px auto !important;
+        padding: 20px 16px !important;
+        border-radius: 17px !important;
+    }
+
+    .search-title {
+        font-size: 21px !important;
+    }
+
+    .search-input {
+        height: 55px !important;
+        font-size: 16px !important;
+    }
+
+    .search-button {
+        height: 54px !important;
+        font-size: 18px !important;
+    }
+}
+
+/* الشاشات الصغيرة جداً */
+@media (max-width: 360px) {
+    .search-container {
+        width: 95% !important;
+        padding: 16px 12px !important;
+    }
+
+    .ministry {
+        font-size: 18px !important;
+    }
+
+    .directorate {
+        font-size: 15px !important;
+    }
+
+    .school {
+        font-size: 15px !important;
+    }
+
+    .system {
+        font-size: 17px !important;
+    }
+}
+</style>
+<style>
+#resultArea .student-info-box {
+    background: #f7faff !important;
+    border: 1px solid #dce7f3 !important;
+    border-right: 3px solid #1769ad !important;
+    border-radius: 9px !important;
+    padding: 7px 9px !important;
+    margin: 7px 0 10px !important;
+    box-shadow: 0 2px 6px rgba(20,60,100,.05) !important;
+    line-height: 1.3 !important;
+}
+
+#resultArea .student-info-title {
+    font-size: 14px !important;
+    color: #174b80 !important;
+    padding: 0 0 5px !important;
+    margin: 0 0 6px !important;
+    border-bottom: 1px solid #dce7f3 !important;
+}
+
+#resultArea .student-info-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+}
+
+#resultArea .student-info-item {
+    background: #fff !important;
+    border: 1px solid #e5edf6 !important;
+    border-radius: 7px !important;
+    padding: 5px 7px !important;
+    margin: 0 0 5px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 5px !important;
+    min-width: 0 !important;
+}
+
+#resultArea .student-info-item span {
+    font-size: 11px !important;
+    color: #6483a5 !important;
+}
+
+#resultArea .student-info-item strong {
+    font-size: 12px !important;
+    color: #153e6d !important;
+}
+
+#resultArea .student-info-row .student-info-item {
+    margin-bottom: 0 !important;
+}
+</style>
+<style>
+#resultArea .subject-card {
+  background: #eaf2fb !important;
+  border: 1px solid #c4d7ec !important;
+  border-radius: 10px !important;
+}
+
+#resultArea .subject-card-title {
+  background: #d8e7f7 !important;
+  color: #0755a5 !important;
+  font-weight: 800 !important;
+}
+</style>
+<style>
+#resultArea .subject-item {
+    background: #eaf2fb !important;
+    border: 1px solid #c4d7ec !important;
+    border-radius: 12px !important;
+}
+
+#resultArea .subject-toggle {
+    background: #d8e7f7 !important;
+    color: #0755a5 !important;
+    border: none !important;
+}
+
+#resultArea .subject-name {
+    color: #0755a5 !important;
+    font-weight: 800 !important;
+}
+</style>
+<style>
+/* لون عبارة عرض الدرجات */
+#resultArea .subject-hint {
+    color: #a61b1b !important;
+    font-weight: bold !important;
+}
+
+/* لون مستطيل المادة */
+#resultArea .subject-item {
+    background: #eaf2fb !important;
+    border: 1px solid #c4d7ec !important;
+}
+
+/* خلفية اسم المادة */
+#resultArea .subject-toggle {
+    background: #d8e7f7 !important;
+}
+
+/* لون اسم المادة */
+#resultArea .subject-name {
+    color: #0755a5 !important;
+    font-weight: 800 !important;
+}
+
+/* الفاصل بين معلومات الطالب والمواد */
+#resultArea .student-info-box + .compact-results::before {
+    content: "";
+    display: block;
+    width: 75%;
+    height: 3px;
+    margin: 17px auto 15px;
+    border-radius: 10px;
+    background: linear-gradient(
+        to right,
+        transparent,
+        #8bb9e8,
+        #0755a5,
+        #8bb9e8,
+        transparent
+    );
+}
+</style>
+<style>
+#resultArea .blocked-result {
+    background: linear-gradient(145deg,#fffafa,#fff1f1) !important;
+    border: 1px solid #e5b5b5 !important;
+    border-right: 5px solid #a61b1b !important;
+    border-radius: 14px !important;
+    padding: 20px 16px !important;
+    margin: 14px 0 !important;
+    color: #7d2929 !important;
+    text-align: right !important;
+    line-height: 2 !important;
+    box-shadow: 0 4px 12px rgba(100,20,20,.08) !important;
+}
+
+#resultArea .blocked-result div:first-child {
+    color: #a61b1b !important;
+    font-size: 19px !important;
+    font-weight: bold !important;
+    padding-bottom: 9px !important;
+    border-bottom: 1px solid #efd0d0 !important;
+    margin-bottom: 10px !important;
+}
+
+#resultArea .blocked-result div:last-child {
+    background: #fff !important;
+    border: 1px solid #f0dada !important;
+    border-radius: 9px !important;
+    padding: 9px 12px !important;
+    color: #333 !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+}
+</style>
+<style>
+#resultArea .blocked-result {
+    background: #FFF8F8 !important;
+    border: 1px solid #F0DEDF !important;
+    border-radius: 8px !important;
+    padding: 7px 12px !important;
+    margin: 8px 0 !important;
+    color: #51464A !important;
+    text-align: right !important;
+    line-height: 1.6 !important;
+    box-shadow: none !important;
+}
+
+#resultArea .blocked-result div:first-child {
+    color: #B45C68 !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    padding: 0 !important;
+    border: none !important;
+    margin: 0 !important;
+}
+
+#resultArea .blocked-result div:last-child {
+    color: #51464A !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+</style>
+<style>
+#resultArea .blocked-result {
+    background: #FFF6F6 !important;
+    border: 1px solid #EAD5D8 !important;
+    border-radius: 9px !important;
+    padding: 8px 12px !important;
+    margin: 8px 0 !important;
+    text-align: center !important;
+    line-height: 1.6 !important;
+    box-shadow: none !important;
+}
+
+#resultArea .blocked-result div:first-child {
+    color: #B45C68 !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    margin: 0 0 3px !important;
+    padding: 0 0 4px !important;
+    border-bottom: 1px solid #EAD5D8 !important;
+    text-align: center !important;
+}
+
+#resultArea .blocked-result div:last-child {
+    color: #62565A !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+</style>
+<style>
+#resultArea .blocked-result {
+    background: #FFF6F6 !important;
+    border: 1px solid #EAD5D8 !important;
+    border-radius: 9px !important;
+    padding: 8px 12px !important;
+    margin: 8px 0 !important;
+    text-align: center !important;
+    line-height: 1.6 !important;
+    box-shadow: none !important;
+}
+
+#resultArea .blocked-result div:first-child {
+    color: #B45C68 !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    margin: 0 0 3px !important;
+    padding: 0 0 4px !important;
+    border-bottom: 1px solid #EAD5D8 !important;
+    text-align: center !important;
+}
+
+#resultArea .blocked-result div:last-child {
+    color: #62565A !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+</style>
+<style>
+#resultArea .blocked-result div:first-child {
+    color: #000000 !important;
+    font-weight: 600 !important;
+}
+
+#resultArea .blocked-result div:last-child {
+    color: #000000 !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+}
+</style>
+</body>
+</html>
+
